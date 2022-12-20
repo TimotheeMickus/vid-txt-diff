@@ -65,7 +65,7 @@ train_path =  (
 train_dataset = data.VatexDataset.get(
     args.tasks,
     train_path,
-    data_dir / "vatex_training_v1.0.json",
+    data_dir / "train.json",
     data_dir / 'val',
     downsample=args.downsample,
     noise=args.noise if not args.dynamic_noise else None,
@@ -74,7 +74,7 @@ train_dataloader = data.get_dataloader(train_dataset, batch_size=1024)
 valid_dataset = data.VatexDataset.get(
     args.tasks,
     data_dir / '-'.join(args.tasks) / ('valid' + ext),
-    data_dir / "vatex_validation_v1.0.json",
+    data_dir / "dev.json",
     data_dir / 'val',
     downsample=True,
     noise=args.noise if not args.dynamic_noise else None,

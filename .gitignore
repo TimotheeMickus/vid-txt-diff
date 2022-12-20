@@ -1,0 +1,6 @@
+data/
+*.pyc
+.venv/
+logs/
+models/
+events.*
