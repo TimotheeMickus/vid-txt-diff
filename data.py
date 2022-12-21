@@ -43,9 +43,11 @@ class VatexDataset(torch.utils.data.Dataset):
         self.downsample = downsample
         self.tasks = tasks
         self.items = []
+        self._vid_path = vid_path
         with open(json_path, 'r') as data_fh:
             for item in tqdm.tqdm(json.load(data_fh), desc=json_path.name):
                 self.items.extend(self.process(item))
+        del self._vid_path
 
     def __getitem__(self, index):
         return self.items[index]
@@ -105,7 +107,7 @@ class VatexDataset(torch.utils.data.Dataset):
         return list(all_features)
 
     def process_captioning(self, item):
-        vid_path_ = vid_path / (item["videoID"] + '.npy')
+        vid_path_ = self._vid_path / (item["videoID"] + '.npy')
         tensor = torch.from_numpy(np.load(vid_path_)).squeeze(0).to(self.device)
         all_features =  [self.add_noise(tensor)]
         if not self.downsample:
