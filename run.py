@@ -226,7 +226,7 @@ for epoch in tqdm.trange(args.epochs, desc='Epochs'):
                     })
                 pbar_val.set_postfix(postfix)
                 pbar_val.update(batch['size'])
-            for task in tasks:
+            for task in args.tasks:
                 summary_writer.add_scalar(
                     f'val/loss-{task[0].upper()}',
                     sum(losses_val[task]) / len(losses_val[task]),
