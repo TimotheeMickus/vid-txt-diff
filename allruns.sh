@@ -23,7 +23,7 @@ for SEED in {1..5}; do
   for MODE in multitask multimodal; do
     GROUNDING_TASK='captioning-translation'
     PREFIX=models/paraphrase-${GROUNDING_TASK}/${MODE}-downsample-n-none/${SEED};
-    if [ ! -f ${PREFIX}/paraphrase-${GROUNDING_TASK}_${MODE}_e25.pt ] && [ ! -f ${PREFIX}/${GROUNDING_TASK}-paraphrase_${MODE}_e25.pt ]; then
+    if [ ! -f ${PREFIX}/captioning-paraphrase-translation_${MODE}_e25.pt ]; then
       mkdir -p models/paraphrase-${GROUNDING_TASK}/${MODE}-downsample-n-none/${SEED}/;
       python3 run.py paraphrase captioning translation \
         --models-dir models/paraphrase-${GROUNDING_TASK}/${MODE}-downsample-n-none/${SEED}/ \
@@ -34,7 +34,7 @@ for SEED in {1..5}; do
     fi;
     for NOISE in 0.5 1.0 1.5; do
       PREFIX=models/paraphrase-${GROUNDING_TASK}/${MODE}-downsample-n-${NOISE}/${SEED};
-      if [ ! -f ${PREFIX}/paraphrase-${GROUNDING_TASK}_${MODE}_e25.pt ] && [ ! -f ${PREFIX}/${GROUNDING_TASK}-paraphrase_${MODE}_e25.pt ]; then
+      if [ ! -f ${PREFIX}/captioning-paraphrase-translation_${MODE}_e25.pt ]; then
         mkdir -p models/paraphrase-${GROUNDING_TASK}/${MODE}-downsample-n-${NOISE}/${SEED}/;
         python3 run.py paraphrase captioning translation \
           --models-dir models/paraphrase-${GROUNDING_TASK}/${MODE}-downsample-n-${NOISE}/${SEED}/ \

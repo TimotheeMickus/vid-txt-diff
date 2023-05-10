@@ -47,6 +47,10 @@ class VatexDataset(torch.utils.data.Dataset):
         with open(json_path, 'r') as data_fh:
             for item in tqdm.tqdm(json.load(data_fh), desc=json_path.name):
                 self.items.extend(self.process(item))
+        self.items = sorted(
+            self.items,
+            key=lambda d: sum(f.size(0) for f in d['src'].values()) / len(d['src']),
+        )
         del self._vid_path
 
     def __getitem__(self, index):
@@ -79,6 +83,7 @@ class VatexDataset(torch.utils.data.Dataset):
             ).to(self.device),
             'size': len(items),
         }
+        batch['ntoks'] = (batch['tgt']['input_ids'] != self._en_tokenizer.pad_token_id).int().sum().item()
         return batch
 
     def add_noise(self, features):

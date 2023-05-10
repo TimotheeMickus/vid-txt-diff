@@ -35,6 +35,7 @@ class Decoder(nn.Module):
         assert len(tasks) == len(d_src_feats)
         if combination_mode == 'none':
             assert len(tasks) == 1
+        self.tasks = tasks
 
         super().__init__()
         self.token_embeddings = nn.Embedding(
@@ -78,12 +79,11 @@ class Decoder(nn.Module):
             else:  # gain parameters of the layer norm
                 nn.init.ones_(param)
 
-    def forward(self, src_feats, src_lengths, tasks, tgt):
+    def forward(self, src_feats, src_lengths, tasks, tgt, project_on_vocab=True):
         tgt_ids = tgt.input_ids.t()
         T, B = tgt_ids.size()
 
         assert len(src_feats) == len(src_lengths) == len(tasks)
-
 
         src_feats_to_combine, src_masks_to_combine = [], []
         for feats, lengths, task in zip(src_feats, src_lengths, tasks):
@@ -111,4 +111,7 @@ class Decoder(nn.Module):
             tgt_key_padding_mask=tgt_padding_mask,
             memory_key_padding_mask=src_padding_mask,
         )
-        return self.vocab_proj(last_hidden_state)
+        if project_on_vocab:
+            return self.vocab_proj(last_hidden_state)
+        else:
+            return last_hidden_state
