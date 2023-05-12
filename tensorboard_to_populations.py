@@ -1,3 +1,4 @@
+import argparse
 import itertools
 import pathlib
 
@@ -6,57 +7,64 @@ import scipy.stats
 import tbparse
 import tqdm
 
-logs = pathlib.Path('logs')
-C_dir = logs / 'captioning'
-P_dir = logs / 'paraphrase'
-T_dir = logs / 'translation'
+parser = argparse.ArgumentParser()
+parser.add_argument('output', type=str)
+parser.add_argument('tasks', nargs='+', choices=['captioning', 'paraphrase', 'translation', 'paraphrase-captioning', 'paraphrase-translation', 'paraphrase-captioning-translation'])
+args = parser.parse_args()
+tasks = sorted(set(args.tasks))
 
-def dir_to_data(basedir, tag):
+logs = pathlib.Path('logs')
+dirs = [logs / task for task in tasks]
+
+def dir_to_data(basedir):
     to_concatenate = []
-    for name in tqdm.tqdm(list(map(str, basedir.glob('**/events.*'))), desc=tag):
+    for name in tqdm.tqdm([str(p) for p in basedir.glob('**/events.*') if not 'multitask' in str(p)], desc=str(basedir)):
         df = tbparse.SummaryReader(name).scalars
+        tag, *bummers = [tag for tag in df.tag.unique() if tag.startswith('val/acc-')]
+        assert not bummers
         df = df[(df.tag == tag) & (df.step.apply({5, 10, 20, 25}.__contains__))].reset_index()
         df['name'] = name
         to_concatenate.append(df)
     df = pd.concat(to_concatenate)[['name', 'step', 'value']]
     return list(df.itertuples())
 
-Cs = dir_to_data(C_dir, 'val/acc-C')
-Ps = dir_to_data(P_dir, 'val/acc-P')
-Ts = dir_to_data(T_dir, 'val/acc-T')
+pivot, *groups = list(map(dir_to_data, dirs))
 
 aligned = []
-while len(Cs) > 0:
+while len(pivot) > 0:
     alignments = []
-    for C_i in Cs:
-        P_i = min(Ps, key=lambda P_j: abs(P_j.value - C_i.value))
-        T_i = min(Ts, key=lambda T_j: abs(T_j.value - C_i.value))
-        alignments.append([C_i, P_i, T_i])
-    selected = min(alignments, key=lambda tri: abs(tri[0].value - tri[1].value) + abs(tri[0].value - tri[2].value))
-    C_i, P_i, T_i = selected
-    del Cs[Cs.index(C_i)]
-    del Ps[Ps.index(P_i)]
-    del Ts[Ts.index(T_i)]
+    for M_i in pivot:
+        X_is = [min(grp, key=lambda X_j: abs(X_j.value - M_i.value)) for grp in groups]
+        alignments.append([M_i, *X_is])
+    selected = min(alignments, key=lambda alg: sum(abs(alg[0].value - alg[i + 1].value) for i in range(len(groups))))
+    M_i, *X_is = selected
+    del pivot[pivot.index(M_i)]
+    for X_i, grp in zip(X_is, groups):
+        del grp[grp.index(X_i)]
     aligned.append(selected)
 
+print(len(aligned))
+
 final_idx = -1
-for idx in range(10, len(aligned) + 1):
-    A, B, C = zip(*aligned[:idx])
-    A, B, C = [x.value for x in A], [x.value for x in B], [x.value for x in C]
-    anova = scipy.stats.kruskal(A, B, C)
+for idx in range(10, len(aligned) // 2 + 2):
+    all_groups = zip(*aligned[:idx])
+    all_groups = [[x.value for x in G] for G in all_groups]
+    anova = scipy.stats.kruskal(*all_groups)
     print(idx, anova)
+    final_idx = idx - 1
     if anova.pvalue < 0.5:  # being very conservative
-        final_idx = idx - 1
         break
 
-A, B, C = zip(*aligned[:final_idx])
-selected = pd.DataFrame.from_records(A + B + C, columns=['_', 'logfile', 'checkpoint', 'acc'])[['logfile', 'checkpoint', 'acc']]
+print(final_idx)
+
+selected = sum(map(list, zip(*aligned[:final_idx])), [])
+selected = pd.DataFrame.from_records(selected, columns=['_', 'logfile', 'checkpoint', 'acc'])[['logfile', 'checkpoint', 'acc']]
 def to_checkpoint_file(row):
     p = pathlib.Path('model' + row['logfile'][len('log'):]).parent
     return p  / f'{p.parents[1].stem}_none_e{row["checkpoint"]}.pt'
 
 selected['model'] = selected.apply(to_checkpoint_file, axis=1)
 
-with open('relevant-models.txt', 'w') as ostr:
+with open(args.output, 'w') as ostr:
     for model in selected['model'].to_list():
         print(model, file=ostr)
