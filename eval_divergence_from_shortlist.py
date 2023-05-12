@@ -10,6 +10,9 @@ from model import Decoder, get_square_mask
 import data
 
 
+shortlist = 'relevant-multimodal-models.txt'
+out_fname = 'all-kldivs.multimodal-shortlist.csv'
+
 all_tasks = sorted(['translation', 'paraphrase', 'captioning'])
 
 data_dir = pathlib.Path('data')
@@ -102,11 +105,10 @@ def shortform(model_name, as_str=True):
         return '/'.join(info)
     return info
 
-with open('relevant-models.txt') as istr:
+with open(shortlist) as istr:
     models_path = list(map(str.strip, istr))
 
 
-out_fname = 'all-kldivs.shortlist.csv'
 if not pathlib.Path(out_fname).is_file():
     pd.DataFrame(columns=['model_1', 'model_2', 'kl_div', 'agreement']).to_csv(out_fname, index=False)
 all_records = pd.read_csv(out_fname)
