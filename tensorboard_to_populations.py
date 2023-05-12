@@ -61,7 +61,12 @@ selected = sum(map(list, zip(*aligned[:final_idx])), [])
 selected = pd.DataFrame.from_records(selected, columns=['_', 'logfile', 'checkpoint', 'acc'])[['logfile', 'checkpoint', 'acc']]
 def to_checkpoint_file(row):
     p = pathlib.Path('model' + row['logfile'][len('log'):]).parent
-    return p  / f'{p.parents[1].stem}_none_e{row["checkpoint"]}.pt'
+    tasks = p.parents[1].stem
+    comp = 'none'
+    if "-" in tasks:
+        comp = 'multimodal'
+        tasks = '-'.join(sorted(tasks.split('-')))
+    return p  / f'{tasks}_{comp}_e{row["checkpoint"]}.pt'
 
 selected['model'] = selected.apply(to_checkpoint_file, axis=1)
 
