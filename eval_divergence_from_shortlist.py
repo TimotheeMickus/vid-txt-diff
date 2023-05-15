@@ -10,8 +10,9 @@ from model import Decoder, get_square_mask
 import data
 
 
-shortlist = 'relevant-multimodal-models.txt'
-out_fname = 'all-kldivs.multimodal-shortlist.csv'
+shortlist = 'relevant-multitask-models.txt'
+out_fname = 'all-kldivs.multitask-shortlist.csv'
+multitask = True
 
 all_tasks = sorted(['translation', 'paraphrase', 'captioning'])
 
@@ -82,7 +83,13 @@ def load_model(path, device=torch.device('cuda')):
 @torch.no_grad()
 def get_all_preds(decoder, batch):
     if decoder.combination_mode == 'multitask':
-        raise RuntimeError
+        assert multitask
+        return F.log_softmax(decoder(
+            [batch['src_feats']['paraphrase']],
+            [batch['src_length']['paraphrase']],
+            ['paraphrase'],
+            batch['tgt'],
+        )[:-1], dim=-1).flatten(0, 1)
     else:
         return F.log_softmax(decoder(
             [batch['src_feats'][t] for t in decoder.tasks],
