@@ -10,6 +10,8 @@ import tqdm
 parser = argparse.ArgumentParser()
 parser.add_argument('output', type=str)
 parser.add_argument('tasks', nargs='+', choices=['captioning', 'paraphrase', 'translation', 'paraphrase-captioning', 'paraphrase-translation', 'paraphrase-captioning-translation'])
+parser.add_argument('--tag', type=str, default=None)
+parser.add_argument('--multitask', action='store_true')
 args = parser.parse_args()
 tasks = sorted(set(args.tasks))
 
@@ -18,10 +20,18 @@ dirs = [logs / task for task in tasks]
 
 def dir_to_data(basedir):
     to_concatenate = []
-    for name in tqdm.tqdm([str(p) for p in basedir.glob('**/events.*') if not 'multitask' in str(p)], desc=str(basedir)):
+    if args.multitask:
+        files = [str(p) for p in basedir.glob('**/events.*') if not 'multimodal' in str(p)]
+    else:
+        files = [str(p) for p in basedir.glob('**/events.*') if not 'multitask' in str(p)]
+    for name in tqdm.tqdm(files, desc=str(basedir)):
         df = tbparse.SummaryReader(name).scalars
-        tag, *bummers = [tag for tag in df.tag.unique() if tag.startswith('val/acc-')]
-        assert not bummers
+        if args.tag is None:
+            tag, *bummers = [tag for tag in df.tag.unique() if tag.startswith('val/acc-')]
+            assert not bummers
+        else:
+            assert args.tag in df.tag.unique()
+            tag = args.tag
         df = df[(df.tag == tag) & (df.step.apply({5, 10, 20, 25}.__contains__))].reset_index()
         df['name'] = name
         to_concatenate.append(df)
@@ -64,7 +74,7 @@ def to_checkpoint_file(row):
     tasks = p.parents[1].stem
     comp = 'none'
     if "-" in tasks:
-        comp = 'multimodal'
+        comp = 'multitask' if args.multitask else 'multimodal'
         tasks = '-'.join(sorted(tasks.split('-')))
     return p  / f'{tasks}_{comp}_e{row["checkpoint"]}.pt'
 
