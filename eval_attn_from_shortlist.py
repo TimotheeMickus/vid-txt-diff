@@ -12,8 +12,10 @@ import data
 import os
 import seaborn as sns
 import matplotlib.pyplot as plt
-import collections
+
 import numpy as np
+import json
+
 
 project_dir = "/users/zosaelai/uncertainty_data/vid-txt-diff"
 data_dir = pathlib.Path("/users/zosaelai/uncertainty_data/vid-txt-diff/data")
@@ -95,6 +97,8 @@ def get_all_preds(decoder, batch):
             batch['tgt'],
         )
 
+        pred = F.log_softmax(last_hidden_state[:-1], dim=-1).flatten(0, 1)
+        
         # return F.log_softmax(decoder(
         #     [batch['src_feats'][t] for t in decoder.tasks],
         #     [batch['src_length'][t] for t in decoder.tasks],
@@ -102,7 +106,7 @@ def get_all_preds(decoder, batch):
         #     batch['tgt'],
         # )[:-1], dim=-1).flatten(0, 1)
         # print('last_hidden_state:', last_hidden_state)
-        print('last_hidden_weights:', last_hidden_weights.shape)
+        # print('last_hidden_weights:', last_hidden_weights.shape)
         return last_hidden_state, last_hidden_weights
 
 
@@ -131,36 +135,74 @@ all_records = pd.read_csv(out_fname)
 def is_valid_model2(candidate, given_model_path):
     return True
 
-full_pbar = tqdm.trange(len(models_path) * (len(models_path) - 1) // 2)
+def plot_attention_heatmap(attn_matrix, model_name):
+    sns_plot = sns.heatmap(attn_matrix.cpu().detach().numpy())
+    model_name = model_name.replace("/", "_")
+    fig_filename = os.path.join(project_dir, 'attn_heatmaps', model_name + ".png")
+    plt.savefig(fig_filename)
+    print('Saved attention heatmap to', fig_filename)
+    plt.close()
 
-for idx, model1_path in tqdm.tqdm(enumerate(models_path), total=len(models_path), leave=False, position=1):
-    print('Model', idx+1, "of", len(models_path))
-    model = load_model(os.path.join(project_dir, model1_path))
-    test_dataloader = data.get_dataloader(
+test_dataloader = data.get_dataloader(
         test_dataset,
         batch_size=2048,
         shuffle=False,
     )
 
-    weights = collections.defaultdict(float)
+full_pbar = tqdm.trange(len(models_path) * (len(models_path) - 1) // 2)
+
+model_task_attn = {t: [] for t in all_tasks}
+model_task_attn['model'] = []
+model_task_attn['task'] = []
+model_task_attn['batch'] = []
+model_task_attn['batch_size'] = []
+model_task_attn['sample_idx'] = []
+for idx, model_path in tqdm.tqdm(enumerate(models_path), total=len(models_path), leave=False, position=1):
+    print('Model', idx+1, "of", len(models_path))
+    model = load_model(os.path.join(project_dir, model_path))
+
+    model_name = model_path.split("models/")[1]
     for batch_idx, batch in enumerate(test_dataloader):
-        if batch_idx == 0:
-            pred, attn_weights = get_all_preds(model, batch)
-            attn_mean = attn_weights.mean(dim=0).cpu().detach().numpy()
-            #print('attn_mean:', attn_mean.shape)
-            sns_plot = sns.heatmap(attn_mean.T)
-            fig_filename = os.path.join(project_dir, 'attn_maps', os.path.basename(model1_path) + ".png")
-            plt.savefig(fig_filename)
-            print('Saved attention heatmap to', fig_filename)
-            plt.close()
-            # group attention weights by task
-            # weights = collections.defaultdict(float)
-            boundaries = [batch['src_length'][t].cpu().detach().numpy() for t in model.tasks]
-            print('boundaries:', boundaries)
-            # for task, start, end in zip(model.tasks, boundaries, boundaries[1:]):
-            #     weights[task] += attn_mean[..., start:end]
+        print('-'*15, 'batch', batch_idx, '-'*15)
+        print('batch size:', batch['size'])
+        pred, attn_weights = get_all_preds(model, batch)
+        print('attn_weights:', attn_weights.shape)
+        # attn_matrix_sum = attn_weights.sum(dim=0)
+        # print('attn_matrix_sum:', attn_matrix_sum.shape)
+        # if batch_idx == 0:
+        #     plot_attention_heatmap(attn_weights[0].T, model_name+"_batch0_example0")
+        attn_tokens_sum = attn_weights.sum(dim=1)
+        print('attn_tokens_sum:', attn_tokens_sum.shape)
+        # for each example, sum up attention weights by task
+        for sample_idx in range(attn_tokens_sum.shape[0]):
+            print('--- sample', sample_idx, '---')
+            boundaries = {t: batch['src_length'][t].cpu().detach().numpy() for t in model.tasks}
+            print('tasks:', model.tasks)
+            start_index = 0
+            task_attn = {t: 0 for t in all_tasks}
+            for task in boundaries:
+                print('task:', task)
+                end_index = start_index + boundaries[task].max()
+                print('start_index:', start_index)
+                print('end_index:', end_index)
+                task_attn_sum = attn_tokens_sum[sample_idx][start_index:end_index].sum().item()
+                task_attn[task] = task_attn_sum
+                start_index = end_index
+            model_task_attn['model'].append(model_name)
+            model_task_attn['task'].append(model_name.split("/")[0])
+            model_task_attn['batch'].append(batch_idx)
+            model_task_attn['batch_size'].append(batch['size'])
+            model_task_attn['sample_idx'].append(sample_idx)
+            for task in task_attn:
+                model_task_attn[task].append(task_attn[task])
 
 
+# write and save attention totals to CSV
+model_task_attn = pd.DataFrame(model_task_attn)
+model_task_attn.to_csv(os.path.join(project_dir, "model_attn_by_sample.csv"), index=False)
+print('Saved attention scores to:', os.path.join(project_dir, "model_attn_by_sample.csv"))
+
+print("ALL DONE!")
 
 # for idx, model1_path in tqdm.tqdm(enumerate(models_path), total=len(models_path), leave=False, position=1):
 #     model1 = load_model(os.path.join(project_dir, model1_path))
