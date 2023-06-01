@@ -4,6 +4,7 @@ import pathlib
 import pandas as pd
 import torch
 import torch.nn.functional as F
+import torch.distributions as D
 import tqdm
 
 from model import Decoder, get_square_mask
@@ -134,15 +135,19 @@ model_pred_entropy['entropy'] = []
 for idx, model_path in tqdm.tqdm(enumerate(models_path), total=len(models_path), leave=False, position=1):
     print('Model', idx+1, "of", len(models_path))
     model = load_model(os.path.join(project_dir, model_path))
-    entropy_model = []
+    entropy_model = 0.
+    total = 0.
     for batch_idx, batch in enumerate(test_dataloader):
-        pred = get_all_preds(model, batch).cpu().detach().numpy()
-        # ids = batch['tgt'].input_ids[..., :-1]
-        # pad, eos = test_dataset._en_tokenizer.pad_token_id, test_dataset._en_tokenizer.eos_token_id
-        # true_toks = ((ids != pad) & (ids != eos)).t().contiguous().view(-1, 1)
-        entropy_batch = entropy(pred, axis=1).mean()
-        entropy_model.append(entropy_batch)
-    entropy_model = np.mean(entropy_model)
+        # print("-"*10, "batch", batch_idx, "-"*10)
+        pred = get_all_preds(model, batch)
+        ids = batch['tgt'].input_ids[..., :-1]
+        pad, eos = test_dataset._en_tokenizer.pad_token_id, test_dataset._en_tokenizer.eos_token_id
+        true_toks = ((ids != pad) & (ids != eos)).t().contiguous().view(-1, 1).squeeze()
+        entropy_batch = (D.Categorical(pred).entropy())
+        entropy_batch = (entropy_batch*true_toks)
+        entropy_model += entropy_batch.sum()
+        total += true_toks.sum()
+    entropy_model = (entropy_model / total).cpu().detach().numpy()
     model_name = model_path.split("models/")[1]
     print("model_name:", model_name)
     print("entropy_model:", entropy_model)
