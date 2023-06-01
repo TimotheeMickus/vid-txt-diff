@@ -128,8 +128,6 @@ full_pbar = tqdm.trange(len(models_path) * (len(models_path) - 1) // 2)
 model_pred_entropy = {}
 model_pred_entropy['model'] = []
 model_pred_entropy['task'] = []
-model_pred_entropy['batch'] = []
-model_pred_entropy['sample_idx'] = []
 model_pred_entropy['entropy'] = []
 
 for idx, model_path in tqdm.tqdm(enumerate(models_path), total=len(models_path), leave=False, position=1):
