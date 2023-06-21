@@ -34,11 +34,15 @@ def compute_silhouette_balance_data(data, shuffle_data=True):
     true_labels = balanced_data.word_type.tolist()
     return metrics.silhouette_score(emb_matrix, true_labels)
 
-print("-"*15, "Silhouette scores", "-"*15)
+concreteness_scores = {
+                    'task': [],
+                    'sil': [],
+                    'affprop_purity': [],
+                    'affprop_inv_purity': [],
+                    'num_clusters': []
+                    }
 
-task_sil = {'task': [],
-            'sil': []
-            }
+print("-"*15, "Silhouette scores", "-"*15)
 
 for task in tasks:
     print('Task:', task.upper())
@@ -46,15 +50,8 @@ for task in tasks:
     model_sil = task_models.groupby("model").apply(lambda x: compute_silhouette_balance_data(x))
     print('mean:', model_sil.mean())
     print('std:', model_sil.std())
-    task_sil['sil'].extend(model_sil.tolist())
-    task_sil['task'].extend([task]*len(model_sil))
-
-task_sil = pd.DataFrame.from_dict(task_sil)
-P_sil = task_sil[task_sil.task == 'P'].sil.to_list()
-C_sil = task_sil[task_sil.task == 'C'].sil.to_list()
-T_sil = task_sil[task_sil.task == 'T'].sil.to_list()
-
-
+    concreteness_scores['sil'].extend(model_sil.tolist())
+    concreteness_scores['task'].extend([task]*len(model_sil))
 
 # Affinity propagation clustering
 def purity_score(y_true, y_pred):
@@ -82,12 +79,6 @@ def compute_purity_balance_data_aff_prop(data, shuffle_data=True):
 
 print("-"*15, "Affinity propagation: purity scores", "-"*15)
 
-task_purity_aff_prop = {
-                        'task': [],
-                        'purity': [],
-                        'inv_purity': [],
-                        'num_clusters': []
-                        }
 for task in tasks:
     print('Task:', task.upper())
     task_models = df[df.task == task]
@@ -107,21 +98,18 @@ for task in tasks:
     print('num_clusters std:', num_clusters.std())
     print('num_data:', num_data.mean())
     print("-"*15)
-    task_purity_aff_prop['purity'].extend(model_purity.tolist())
-    task_purity_aff_prop['inv_purity'].extend(inv_model_purity.tolist())
-    task_purity_aff_prop['num_clusters'].extend(num_clusters.tolist())
-    task_purity_aff_prop['task'].extend([task]*len(model_purity))
+    concreteness_scores['purity'].extend(model_purity.tolist())
+    concreteness_scores['inv_purity'].extend(inv_model_purity.tolist())
+    concreteness_scores['num_clusters'].extend(num_clusters.tolist())
 
-task_purity_aff_prop = pd.DataFrame.from_dict(task_purity_aff_prop)
-P_purity = task_purity_aff_prop[task_purity_aff_prop.task == 'P'].purity.to_list()
-C_purity = task_purity_aff_prop[task_purity_aff_prop.task == 'C'].purity.to_list()
-T_purity = task_purity_aff_prop[task_purity_aff_prop.task == 'T'].purity.to_list()
-
-P_inv_purity = task_purity_aff_prop[task_purity_aff_prop.task == 'P'].inv_purity.to_list()
-C_inv_purity = task_purity_aff_prop[task_purity_aff_prop.task == 'C'].inv_purity.to_list()
-T_inv_purity = task_purity_aff_prop[task_purity_aff_prop.task == 'T'].inv_purity.to_list()
 
 print("-"*15, "Silhouette scores", "-"*15)
+
+concreteness_scores = pd.DataFrame.from_dict(concreteness_scores)
+P_sil = concreteness_scores[concreteness_scores.task == 'P'].sil.to_list()
+C_sil = concreteness_scores[concreteness_scores.task == 'C'].sil.to_list()
+T_sil = concreteness_scores[concreteness_scores.task == 'T'].sil.to_list()
+
 
 print("-"*5, "Kruskall-Wallis test", "-"*5)
 print("all:", kruskal(P_sil, C_sil, T_sil))
@@ -135,6 +123,14 @@ print("P vs T:", mannwhitneyu(P_sil, T_sil, alternative='two-sided'))
 print("C vs T:", mannwhitneyu(C_sil, T_sil, alternative='two-sided'))
 
 print("-"*15, "Affinity propagation: purity scores", "-"*15)
+
+P_purity = concreteness_scores[concreteness_scores.task == 'P'].purity.to_list()
+C_purity = concreteness_scores[concreteness_scores.task == 'C'].purity.to_list()
+T_purity = concreteness_scores[concreteness_scores.task == 'T'].purity.to_list()
+
+P_inv_purity = concreteness_scores[concreteness_scores.task == 'P'].inv_purity.to_list()
+C_inv_purity = concreteness_scores[concreteness_scores.task == 'C'].inv_purity.to_list()
+T_inv_purity = concreteness_scores[concreteness_scores.task == 'T'].inv_purity.to_list()
 
 print("-"*5, "Kruskall-Wallis test", "-"*5)
 print("Purity score")
@@ -158,3 +154,7 @@ print("Inverse purity score")
 print("P vs C:", mannwhitneyu(P_inv_purity, C_inv_purity, alternative='two-sided'))
 print("P vs T:", mannwhitneyu(P_inv_purity, T_inv_purity, alternative='two-sided'))
 print("C vs T:", mannwhitneyu(C_inv_purity, T_inv_purity, alternative='two-sided'))
+
+save_path = os.path.join(data_dir, "concreteness_scores_input_embs_monotask.csv")
+concreteness_scores.to_csv(save_path, index=None)
+print("DONE! Saved silhouette and purity scores at:", save_path)
